@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.html": "html",
+        "typeinfo": "c",
+        "accelometer.h": "c"
+    },
+    "files.watcherExclude": {
+        "**/target": true
+    }
+}

@@ -8,6 +8,10 @@ project(Smartwatch)
 FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE
   ${app_sources}
-  )
+  src/accelometer/accelometer.c 
+  src/rtc/driver/RV3028.c
+  src/rtc/rtc.c
+)
 
 zephyr_library_include_directories(${ZEPHYR_BASE}/samples/bluetooth)
+
