@@ -7,28 +7,29 @@
 #include <drivers/sensor.h>
 #include <devicetree.h>
 #include <SEGGER_RTT.h>
+#include <device.h>
 #include <zephyr/types.h>
 #include <drivers/gpio.h>
-#include "accelometer/accelometer.h"
+#include "display/gc9a01.h"
 
 
 void main(void){
 
     SEGGER_RTT_Init();
-
-	printf("SMARTWATCH ZEPHYR OS\n\n");
+	printk("RTT LOG\n\n");
 
 	while (1) {
 
-		fetch_accelometer_data();
-
-		k_sleep(K_SECONDS(1));
+		k_sleep(K_SECONDS(5));
 
         printk("---\n");
+        printk("Display init");
 
+
+        lcd_spi_init();
+        GC9A01_init();
+        struct GC9A01_frame frame = {{0, 0}, {239, 239}};
+        GC9A01_set_frame(frame);
     }
 
 }
-
-
-

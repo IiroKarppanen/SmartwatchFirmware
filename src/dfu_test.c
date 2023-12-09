@@ -275,4 +275,97 @@ CONFIG_MCUMGR_SMP_BT=y
 CONFIG_MCUMGR_SMP_BT_AUTHEN=n
 CONFIG_MCUMGR_SMP_SHELL=y
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########pragma endregion
+
+
+
+#include <stddef.h>
+#include <string.h>
+#include <sys/printk.h>
+#include <sys/byteorder.h>
+#include <zephyr.h>
+#include <drivers/i2c.h>
+#include <drivers/sensor.h>
+#include <devicetree.h>
+#include <SEGGER_RTT.h>
+#include <device.h>
+#include <zephyr/types.h>
+#include <drivers/gpio.h>
+#include "accelometer/accelometer.h"
+
+
+#define GPIO DT_LABEL(DT_NODELABEL(gpio0))
+#define BACKLIGHT_PIN 7
+const struct device *dev;
+gpio_pin_configure(dev, BACKLIGHT_PIN, GPIO_OUTPUT);
+
+void toggle_backlight(void){
+
+	const struct device *dev;
+
+    dev = device_get_binding(GPIO);
+    if (dev == NULL) {
+        printk("Error: Could not get GPIO device\n");
+        return;
+    }
+
+	k_sleep(K_SECONDS(3));
+
+    gpio_pin_configure(dev, BACKLIGHT_PIN, GPIO_OUTPUT);
+
+	printk("BACKLIGHT TOGGLE\n");
+
+	gpio_pin_toggle(dev, BACKLIGHT_PIN);
+}
+
+void main(void){
+
+    SEGGER_RTT_Init();
+
+	printk("RTT LOG\n\n");
+
+	while (1) {
+
+		fetch_accelometer_data();
+
+		k_sleep(K_SECONDS(5));
+
+        printk("---\n");
+
+        const struct device *spi_dev;
+
+        spi_dev = device_get_binding(DT_LABEL(DT_NODELABEL(spi3)));
+        if (!spi_dev) {
+            printk("Error: Could not get SPI device\n");
+        }
+        if(spi_dev){
+            printk("FOUND SPI BUS");
+        }
+
+    }
+
+}
+
+
+
+
 */
