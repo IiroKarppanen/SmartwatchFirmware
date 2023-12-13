@@ -9,8 +9,9 @@ FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE
   ${app_sources}
   src/display/gc9a01.c
+  src/accelometer/accelometer.c
+  src/rtc/rtc.c
 )
-
 
 # zephyr_library_include_directories(${ZEPHYR_BASE}/samples/bluetooth)
 

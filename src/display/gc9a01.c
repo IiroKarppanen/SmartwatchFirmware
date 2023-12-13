@@ -6,6 +6,8 @@
 #include <sys/util.h>   
 #include <math.h>
 #include <stdio.h>
+#include <drivers/gpio.h>
+#include <devicetree.h>
 
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
@@ -16,7 +18,7 @@ LOG_MODULE_REGISTER(main);
 #define GPI1 DT_LABEL(DT_NODELABEL(gpio1))
 
 
-#define ORIENTATION 2 // Set the display orientation 0,1,2,3
+#define ORIENTATION 2 
 #define RESET_ON            gpio_pin_set(device_get_binding(GPI1), LCD_RES_Pin, 1)
 #define RESET_OFF           gpio_pin_set(device_get_binding(GPI1), LCD_RES_Pin, 0)
 #define DC_ON               gpio_pin_set(device_get_binding(GPIO), LCD_DC_Pin, 1)
@@ -25,19 +27,14 @@ LOG_MODULE_REGISTER(main);
 #define CS_OFF              gpio_pin_set(device_get_binding(GPIO), LCD_CS_Pin, 0)
 
 
-
-/***** SPI **************************************************************************/
 #define SPI_BUF_SIZE 8
-static uint8_t tx_buf[SPI_BUF_SIZE];
+static uint8_t m_tx_buf[3]; 
 static const struct device *spi_dev;
 
 struct spi_config spi_cfg = {
     .operation = SPI_OP_MODE_MASTER | SPI_WORD_SET(8), // Set word size to 8 bits
-    .frequency = 4000000,  // 1 MHz
-    .slave = 0,            // Slave address (if applicable)
-    .cs = 0,               // Chip select line
+    .frequency = 1000000,  // 1 MHz
 };
-
 
 /***** Structures *******************************************************************/
 struct GC9A01_frame frame;     // coordinates(X(start,end), Y(start,end)) frame, from 0 to 239
@@ -47,7 +44,6 @@ struct GC9A01_frame frame;     // coordinates(X(start,end), Y(start,end)) frame,
 /***** Display write func ***********************************************************/
 
 void GC9A01_spi_tx(uint8_t *data, size_t len) {
-
     struct spi_buf tx_buf = {
         .buf = data,
         .len = len,
@@ -57,9 +53,11 @@ void GC9A01_spi_tx(uint8_t *data, size_t len) {
         .count = 1,
     };
 
-    spi_transceive(spi_dev, &spi_cfg, &tx, NULL);
+    int result = spi_write(spi_dev, &spi_cfg, &tx_buf);
+    if (result != 0) {
+        LOG_ERR("SPI write failed with error code %d", result);
+    } 
 }
-
 
 
 void GC9A01_write_command(uint8_t cmd) {
@@ -73,7 +71,7 @@ void GC9A01_write_data(uint8_t *data, size_t len) {
     DC_ON;
     CS_OFF;
     GC9A01_spi_tx(data, len);
-    CS_ON;
+    CS_ON;  
 }
 
 static inline void GC9A01_write_byte(uint8_t val) {
@@ -89,6 +87,9 @@ void GC9A01_write_continue(uint8_t *data, size_t len) {
     GC9A01_write_command(MEM_WR_CONT);
     GC9A01_write_data(data, len);
 }
+
+
+
 /***** Hardware and soft func *******************************************************/
 void lcd_spi_init(void) {
     spi_dev = device_get_binding(DT_LABEL(DT_NODELABEL(spi3)));
@@ -101,7 +102,6 @@ void lcd_spi_init(void) {
     gpio_pin_configure(device_get_binding(GPI1), LCD_RES_Pin, GPIO_OUTPUT_ACTIVE);
     gpio_pin_configure(device_get_binding(GPIO), LCD_CS_Pin, GPIO_OUTPUT_ACTIVE);
     gpio_pin_configure(device_get_binding(GPIO), LCD_DC_Pin, GPIO_OUTPUT_ACTIVE);
-
     LOG_INF(" - SPI init successfull! - ");
 }
 
@@ -120,13 +120,9 @@ void GC9A01_init(void) {
     /* Initial Sequence */ 
     
     GC9A01_write_command(0xEF);
-
-    LOG_INF(" - First Command Sent - ");
     
     GC9A01_write_command(0xEB);
     GC9A01_write_byte(0x14);
-
-    LOG_INF(" - First Byte Sent - ");
     
     GC9A01_write_command(0xFE);
     GC9A01_write_command(0xEF);
@@ -173,7 +169,7 @@ void GC9A01_init(void) {
     
     GC9A01_write_command(0xB6);
     GC9A01_write_byte(0x00);
-    GC9A01_write_byte(0x20); // used 0x00
+    GC9A01_write_byte(0x00); 
     
     GC9A01_write_command(0x36);
     
@@ -182,7 +178,7 @@ void GC9A01_init(void) {
 #elif ORIENTATION == 1
     GC9A01_write_byte(0x28);
 #elif ORIENTATION == 2
-    GC9A01_write_byte(0x08); //0x48
+    GC9A01_write_byte(0x48); 
 #else
     GC9A01_write_byte(0x88);
 #endif
@@ -364,6 +360,8 @@ void GC9A01_init(void) {
     k_sleep(K_MSEC(120));
     GC9A01_write_command(0x29);
     k_sleep(K_MSEC(20));
+
+    LOG_INF(" - GC9A01 INIT COMPLETE! - ");
     
 }
 
@@ -375,9 +373,10 @@ void GC9A01A_sleep_mode(uint8_t Mode) {
 
 	k_sleep(K_MSEC(500));
 }
-/************************************************************************************/
 
-/***** Display picture func *********************************************************/
+
+/* Visual Functions */
+
 void GC9A01_set_frame(struct GC9A01_frame frame) {
 
     uint8_t data[4];
@@ -432,4 +431,109 @@ void GC9A01_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h,
     frame.end.X = 239;
     frame.end.Y = 239;
     GC9A01_set_frame(frame);
+}
+
+
+void GC9A01_draw_pixel(int x, int y, uint16_t color) {
+    if ((x < 0) || (y < 0) || (x >= GC9A01A_Width) || (y >= GC9A01A_Height))
+        return;
+    frame.start.X = x;
+    frame.end.X = x;
+    frame.start.Y = y;
+    frame.end.Y = y;
+    GC9A01_set_frame(frame);
+    m_tx_buf[2] = (uint8_t)((color & 0x1F) << 3);    // blue
+    m_tx_buf[1] = (uint8_t)((color & 0x7E0) >> 3);   // green
+    m_tx_buf[0] = (uint8_t)((color & 0xF800) >> 8);  // red
+    GC9A01_write(m_tx_buf, sizeof(m_tx_buf));
+    frame.start.X = 0;
+    frame.end.X = 239;
+    frame.start.Y = 0;
+    frame.end.Y = 239;
+    GC9A01_set_frame(frame);
+}
+
+void GC9A01_draw_line(uint16_t color, uint16_t x1, uint16_t y1,
+                      uint16_t x2, uint16_t y2) {
+    int steep = abs(y2 - y1) > abs(x2 - x1);
+    if (steep)
+    {
+        swap(x1, y1);
+        swap(x2, y2);
+    }
+    if (x1 > x2)
+    {
+        swap(x1, x2);
+        swap(y1, y2);
+    }
+    int dx, dy;
+    dx = x2 - x1;
+    dy = abs(y2 - y1);
+    int err = dx / 2;
+    int ystep;
+    if (y1 < y2)
+        ystep = 1;
+    else
+        ystep = -1;
+    for (; x1 <= x2; x1++)
+    {
+        if (steep)
+            GC9A01_draw_pixel(y1, x1, color);
+        else
+            GC9A01_draw_pixel(x1, y1, color);
+        err -= dy;
+        if (err < 0)
+        {
+            y1 += ystep;
+            err += dx;
+        }
+    }
+}
+
+void GC9A01_draw_circle(uint16_t x0, uint16_t y0, int r, uint16_t color) {
+    int f = 1 - r;
+    int ddF_x = 1;
+    int ddF_y = -2 * r;
+    int x = 0;
+    int y = r;
+    GC9A01_draw_pixel(x0, y0 + r, color);
+    GC9A01_draw_pixel(x0, y0 - r, color);
+    GC9A01_draw_pixel(x0 + r, y0, color);
+    GC9A01_draw_pixel(x0 - r, y0, color);
+    while (x < y)
+    {
+        if (f >= 0)
+        {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+        GC9A01_draw_pixel(x0 + x, y0 + y, color);
+        GC9A01_draw_pixel(x0 - x, y0 + y, color);
+        GC9A01_draw_pixel(x0 + x, y0 - y, color);
+        GC9A01_draw_pixel(x0 - x, y0 - y, color);
+        GC9A01_draw_pixel(x0 + y, y0 + x, color);
+        GC9A01_draw_pixel(x0 - y, y0 + x, color);
+        GC9A01_draw_pixel(x0 + y, y0 - x, color);
+        GC9A01_draw_pixel(x0 - y, y0 - x, color);
+    }
+}
+
+void GC9A01_fill_circle(int16_t x, int16_t y, int16_t radius,
+		uint16_t color) {
+
+    for (uint8_t curX = (x - radius); curX <= (x + radius); curX++)
+    {
+        for (uint8_t curY = (y - radius); curY <= (y + radius); curY++)
+        {
+            if ((pow(x-curX, 2) + pow(y-curY, 2)) <= pow(radius, 2))
+            {
+                GC9A01_draw_pixel(curX, curY, color);
+            }
+        }
+    }
+
 }

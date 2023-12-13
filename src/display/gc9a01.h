@@ -38,7 +38,6 @@
 
 /* Structures */
 
-
 struct GC9A01_point {
     uint16_t X, Y;
 };
@@ -46,6 +45,8 @@ struct GC9A01_point {
 struct GC9A01_frame {
     struct GC9A01_point start, end;
 };
+
+void spi_test(void);
 
 /* Hardware and soft func  */
 void lcd_spi_init(void);
@@ -62,3 +63,9 @@ void GC9A01_write_command(uint8_t cmd);
 /* Display picture func */
 void GC9A01_set_frame(struct GC9A01_frame frame);
 void GC9A01_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+
+
+void GC9A01_draw_pixel(int x, int y, uint16_t color);
+void GC9A01_draw_line(uint16_t color, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
+void GC9A01_draw_circle(uint16_t x0, uint16_t y0, int r, uint16_t color);
+void GC9A01_fill_circle(int16_t x, int16_t y, int16_t radius, uint16_t color);
